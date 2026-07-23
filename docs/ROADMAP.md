@@ -8,7 +8,7 @@
 
 ## Próximo — operação assistida
 
-- Banco local, cursor por `getJournalList`/`date_confirmed` e reconciliação.
+- Banco local SQLite e cursor por `date_confirmed` estão implementados; `getJournalList` e reconciliação ficam para a próxima iteração.
 - Separação por scanner, PickPack carts e atribuição de responsável. A consulta de carrinhos já está disponível no MVP.
 - Auditoria persistente, outbox e reprocessamento de comandos.
 

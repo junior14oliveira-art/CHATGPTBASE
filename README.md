@@ -21,6 +21,17 @@ Painel operacional integrado à BaseLinker para acompanhar pedidos, filas e cat�
 
 O backend inicia em `http://localhost:3333` e o frontend em `http://localhost:5173`.
 
+## Sincronização
+
+Pedidos confirmados são gravados no SQLite local definido por `JRDEV1_DB_PATH`; o arquivo padrão fica em `backend/data/` e não é versionado. Para evitar consultas constantes à BaseLinker, a sincronização é uma operação administrativa:
+
+```bash
+curl -X POST http://localhost:3333/api/sync/orders \
+  -H "x-jrdev1-admin-token: SEU_TOKEN_OPERACIONAL"
+```
+
+Ela usa um cursor de `date_confirmed`, importa status e pedidos confirmados em páginas e mantém o histórico no banco local.
+
 ## Segurança operacional
 
 - `JRDEV1_WRITE_ENABLED=false` é o padrão. Mudança de status e atualização de estoque só podem ser ativadas após homologação.

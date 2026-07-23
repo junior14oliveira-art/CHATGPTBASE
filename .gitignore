@@ -3,4 +3,5 @@ dist/
 .env
 .env.local
 coverage/
+backend/data/
 npm-debug.log*

@@ -1,21 +1,16 @@
 import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { BaseLinkerClient } from './baselinker-client.js';
+import { Jrdev1Store } from './store.js';
+import { syncConfirmedOrders } from './sync-service.js';
 
-const startOfToday = () => {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return Math.floor(date.getTime() / 1000);
-};
-
-const safeNumber = (value) => Number.parseFloat(value || 0) || 0;
-
-export function createApp({ env = process.env, client } = {}) {
+export function createApp({ env = process.env, client, store } = {}) {
   const api = client || new BaseLinkerClient({
     token: env.BASELINKER_TOKEN,
     endpoint: env.BASELINKER_API_URL || 'https://api.baselinker.com/connector.php'
   });
   const app = express();
+  const dataStore = store || new Jrdev1Store(env.JRDEV1_DB_PATH || './data/jrdev1.sqlite');
   const origin = env.ALLOWED_ORIGIN || 'http://localhost:5173';
 
   app.use((req, res, next) => {
@@ -34,11 +29,7 @@ export function createApp({ env = process.env, client } = {}) {
     }
   };
 
-  const requireWriteAccess = (req, res) => {
-    if (env.JRDEV1_WRITE_ENABLED !== 'true') {
-      res.status(403).json({ error: 'Escrita desativada. Homologue e habilite JRDEV1_WRITE_ENABLED=true.' });
-      return false;
-    }
+  const requireAdminToken = (req, res) => {
     if (!env.JRDEV1_ADMIN_TOKEN) {
       res.status(503).json({ error: 'Comandos de escrita exigem JRDEV1_ADMIN_TOKEN no servidor.' });
       return false;
@@ -52,42 +43,26 @@ export function createApp({ env = process.env, client } = {}) {
     return true;
   };
 
-  app.get('/health', (req, res) => res.json({ ok: true, baseLinkerConfigured: api.configured(), writeEnabled: env.JRDEV1_WRITE_ENABLED === 'true' }));
+  const requireWriteAccess = (req, res) => {
+    if (env.JRDEV1_WRITE_ENABLED !== 'true') {
+      res.status(403).json({ error: 'Escrita desativada. Homologue e habilite JRDEV1_WRITE_ENABLED=true.' });
+      return false;
+    }
+    return requireAdminToken(req, res);
+  };
 
-  app.get('/api/dashboard', asyncRoute(async (req, res) => {
-    const [statusData, ordersData] = await Promise.all([
-      api.call('getOrderStatusList'),
-      api.call('getOrders', { date_confirmed_from: startOfToday(), get_unconfirmed_orders: false })
-    ]);
-    const orders = ordersData.orders || [];
-    const revenue = orders.reduce((total, order) => total + safeNumber(order.payment_done || order.total_price), 0);
-    const queues = (statusData.statuses || []).map((status) => ({
-      id: status.id,
-      name: status.name,
-      color: status.color,
-      count: orders.filter((order) => Number(order.order_status_id) === Number(status.id)).length
-    })).filter((status) => status.count > 0);
-    res.json({
-      generatedAt: new Date().toISOString(),
-      ordersToday: orders.length,
-      revenueToday: revenue,
-      ordersLimited: orders.length === 100,
-      queues,
-      recentOrders: orders.slice(0, 8)
-    });
-  }));
+  app.get('/health', (req, res) => res.json({ ok: true, baseLinkerConfigured: api.configured(), writeEnabled: env.JRDEV1_WRITE_ENABLED === 'true', lastSync: dataStore.lastSync() }));
 
-  app.get('/api/statuses', asyncRoute(async (req, res) => {
-    const data = await api.call('getOrderStatusList');
-    res.json({ statuses: data.statuses || [] });
-  }));
+  app.get('/api/dashboard', (req, res) => res.json(dataStore.dashboard()));
 
-  app.get('/api/orders', asyncRoute(async (req, res) => {
-    const parameters = { get_unconfirmed_orders: false };
-    if (req.query.statusId) parameters.status_id = Number(req.query.statusId);
-    if (req.query.from) parameters.date_confirmed_from = Number(req.query.from);
-    const data = await api.call('getOrders', parameters);
-    res.json({ orders: data.orders || [], limited: (data.orders || []).length === 100 });
+  app.get('/api/statuses', (req, res) => res.json({ statuses: dataStore.listStatuses() }));
+
+  app.get('/api/orders', (req, res) => res.json({ orders: dataStore.listOrders({ statusId: req.query.statusId }), limited: false }));
+
+  app.post('/api/sync/orders', asyncRoute(async (req, res) => {
+    if (!requireAdminToken(req, res)) return;
+    const result = await syncConfirmedOrders({ client: api, store: dataStore });
+    res.json({ ok: true, ...result, lastSync: dataStore.lastSync() });
   }));
 
   app.get('/api/inventory', asyncRoute(async (req, res) => {

@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { BaseLinkerClient } from '../src/baselinker-client.js';
 import { createApp } from '../src/app.js';
+import { Jrdev1Store } from '../src/store.js';
 
 test('recusa chamada quando o token não está configurado', async () => {
   const client = new BaseLinkerClient({ token: '', endpoint: 'https://example.test' });
@@ -29,4 +33,15 @@ test('bloqueia alteração de status quando a escrita está desativada', async (
   });
   server.close();
   assert.equal(response.status, 403);
+});
+
+test('persiste pedidos sincronizados e os apresenta no dashboard', () => {
+  const store = new Jrdev1Store(join(mkdtempSync(join(tmpdir(), 'jrdev1-')), 'state.sqlite'));
+  store.saveStatuses([{ id: 7, name: 'Separação', color: '#0F766E' }]);
+  const confirmedAt = Math.floor(Date.now() / 1000);
+  store.saveOrders([{ order_id: 99, order_status_id: 7, date_add: confirmedAt, date_confirmed: confirmedAt, payment_done: 120.50, delivery_fullname: 'Cliente de teste', products: [{ product_id: 1, name: 'Produto', quantity: 1 }] }], confirmedAt + 1);
+  const dashboard = store.dashboard();
+  assert.equal(dashboard.ordersToday, 1);
+  assert.equal(dashboard.revenueToday, 120.5);
+  assert.equal(store.listOrders()[0].order_id, 99);
 });
