@@ -24,6 +24,7 @@ O backend inicia em `http://localhost:3333` e o frontend em `http://localhost:51
 ## Segurança operacional
 
 - `JRDEV1_WRITE_ENABLED=false` é o padrão. Mudança de status e atualização de estoque só podem ser ativadas após homologação.
+- Quando a escrita for habilitada, defina também `JRDEV1_ADMIN_TOKEN`; comandos exigem o cabeçalho `x-jrdev1-admin-token` e uma confirmação explícita no payload.
 - A BaseLinker é chamada somente pelo backend, com `X-BLToken` em variável de ambiente.
 - O cliente tem espaçamento de chamadas para respeitar o limite informado de 100 requisições por minuto.
 - A interface apresenta estados de carregamento, erro e configuração incompleta; não inventa métricas quando não há conexão.

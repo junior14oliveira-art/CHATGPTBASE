@@ -9,7 +9,7 @@
 ## Próximo — operação assistida
 
 - Banco local, cursor por `getJournalList`/`date_confirmed` e reconciliação.
-- Separação por scanner, PickPack carts e atribuição de responsável.
+- Separação por scanner, PickPack carts e atribuição de responsável. A consulta de carrinhos já está disponível no MVP.
 - Auditoria persistente, outbox e reprocessamento de comandos.
 
 ## Depois — escrita homologada
